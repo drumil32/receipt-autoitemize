@@ -1,5 +1,6 @@
 package com.navan.receipts.web;
 
+import com.navan.receipts.error.BadRequestException;
 import com.navan.receipts.service.ReceiptService;
 import com.navan.receipts.service.ReceiptService.UploadResult;
 import java.io.IOException;
@@ -14,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/receipts")
@@ -32,7 +32,7 @@ public class ReceiptController {
     public ResponseEntity<ReceiptUploadResponse> upload(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
             log.warn("Rejected empty upload: {}", file.getOriginalFilename());
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded file is empty");
+            throw new BadRequestException("Uploaded file is empty");
         }
         UploadResult result = receiptService.upload(file.getOriginalFilename(), readBytes(file));
         HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;

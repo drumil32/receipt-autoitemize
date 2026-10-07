@@ -70,7 +70,10 @@ class ReceiptUploadTest {
                 new MockMultipartFile("file", "empty.txt", "text/plain", new byte[0]);
 
         mockMvc.perform(multipart("/receipts").file(empty))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
 
         assertThat(receipts.count()).isZero();
     }
