@@ -1,6 +1,7 @@
 package com.navan.receipts.service;
 
 import com.navan.receipts.domain.Receipt;
+import com.navan.receipts.error.ResourceNotFoundException;
 import com.navan.receipts.repository.ReceiptRepository;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -61,6 +62,12 @@ public class ReceiptService {
             }
             throw dbFailure;
         }
+    }
+
+    /** Returns the receipt, or throws {@link ResourceNotFoundException} if the id is unknown. */
+    public Receipt getReceipt(String id) {
+        return receipts.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Receipt not found: " + id));
     }
 
     private static String sha256(byte[] bytes) {

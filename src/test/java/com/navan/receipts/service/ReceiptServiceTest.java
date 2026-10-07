@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.navan.receipts.domain.Receipt;
+import com.navan.receipts.error.ResourceNotFoundException;
 import com.navan.receipts.repository.ReceiptRepository;
 import com.navan.receipts.service.ReceiptService.UploadResult;
 import java.util.Optional;
@@ -83,6 +84,23 @@ class ReceiptServiceTest {
                 .hasMessage("db down");
 
         verify(storage).delete("data/files/hash"); // orphan file cleaned up
+    }
+
+    @Test
+    void getReceipt_found_returnsReceipt() {
+        Receipt existing = receiptWithId("r-9");
+        when(receipts.findById("r-9")).thenReturn(Optional.of(existing));
+
+        assertThat(service.getReceipt("r-9")).isSameAs(existing);
+    }
+
+    @Test
+    void getReceipt_missing_throwsNotFound() {
+        when(receipts.findById("nope")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getReceipt("nope"))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("nope");
     }
 
     private Receipt receiptWithId(String id) {
