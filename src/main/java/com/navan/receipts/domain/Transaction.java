@@ -74,4 +74,10 @@ public class Transaction {
         lineItems.clear();
         items.forEach(this::addLineItem);
     }
+
+    /** Clears taxes so orphanRemoval deletes the old rows (used by re-process). */
+    public void replaceTaxes(List<Tax> newTaxes) {
+        taxes.clear();
+        newTaxes.forEach(this::addTax);
+    }
 }

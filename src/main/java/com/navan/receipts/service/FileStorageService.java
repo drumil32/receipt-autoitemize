@@ -32,6 +32,15 @@ public class FileStorageService {
         }
     }
 
+    /** Reads the file at {@code path} as UTF-8 text. */
+    public String read(String path) {
+        try {
+            return Files.readString(Paths.get(path));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read file " + path, e);
+        }
+    }
+
     /** Deletes the file at {@code path} if present. */
     public void delete(String path) {
         try {
