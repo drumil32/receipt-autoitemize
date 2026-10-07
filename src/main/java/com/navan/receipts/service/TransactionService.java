@@ -53,6 +53,27 @@ public class TransactionService {
         return new UpsertResult(transactions.save(txn), created);
     }
 
+    /** Returns a transaction by id with its children loaded. 404 if unknown. */
+    @Transactional(readOnly = true)
+    public Transaction getTransaction(String id) {
+        return initChildren(transactions.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found: " + id)));
+    }
+
+    /** Returns the one transaction for a receipt with its children loaded. 404 if none. */
+    @Transactional(readOnly = true)
+    public Transaction getByReceiptId(String receiptId) {
+        return initChildren(transactions.findByReceipt_Id(receiptId)
+                .orElseThrow(() -> new ResourceNotFoundException("No transaction for receipt: " + receiptId)));
+    }
+
+    /** Force-initialize lazy collections inside the session so the DTO can map them later. */
+    private static Transaction initChildren(Transaction txn) {
+        txn.getTaxes().size();
+        txn.getLineItems().size();
+        return txn;
+    }
+
     private static List<Tax> toTaxes(ExtractedReceipt extracted) {
         return extracted.taxes().stream().map(t -> {
             Tax tax = new Tax();

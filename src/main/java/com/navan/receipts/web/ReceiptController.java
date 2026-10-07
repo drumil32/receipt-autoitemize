@@ -52,6 +52,12 @@ public class ReceiptController {
         return ReceiptResponse.from(receipt, receiptService.transactionIdFor(id));
     }
 
+    /** Stored raw OCR text. 404 if unknown, 409 if not processed yet. */
+    @GetMapping("/{id}/ocr")
+    public OcrResponse ocr(@PathVariable String id) {
+        return new OcrResponse(receiptService.getOcrText(id));
+    }
+
     /** Run OCR + extraction and create-or-update the one transaction. 201 create / 200 update. */
     @PostMapping("/{id}/process")
     public ResponseEntity<TransactionResponse> process(@PathVariable String id) {

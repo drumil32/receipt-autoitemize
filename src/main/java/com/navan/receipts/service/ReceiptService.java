@@ -2,6 +2,7 @@ package com.navan.receipts.service;
 
 import com.navan.receipts.domain.Receipt;
 import com.navan.receipts.domain.Transaction;
+import com.navan.receipts.error.ConflictException;
 import com.navan.receipts.error.ResourceNotFoundException;
 import com.navan.receipts.repository.ReceiptRepository;
 import com.navan.receipts.repository.TransactionRepository;
@@ -81,6 +82,15 @@ public class ReceiptService {
     /** The id of this receipt's transaction, or null if it has not been processed. */
     public String transactionIdFor(String receiptId) {
         return transactions.findByReceipt_Id(receiptId).map(Transaction::getId).orElse(null);
+    }
+
+    /** Stored OCR text. 404 if the receipt is missing, 409 if it has not been processed yet. */
+    public String getOcrText(String id) {
+        Receipt receipt = getReceipt(id);
+        if (receipt.getOcrText() == null) {
+            throw new ConflictException("Receipt not processed yet: " + id);
+        }
+        return receipt.getOcrText();
     }
 
     private static String sha256(byte[] bytes) {
