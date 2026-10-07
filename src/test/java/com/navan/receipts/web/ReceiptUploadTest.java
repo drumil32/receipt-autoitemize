@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.navan.receipts.repository.ReceiptRepository;
+import com.navan.receipts.repository.TransactionRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,8 +27,12 @@ class ReceiptUploadTest {
     @Autowired
     ReceiptRepository receipts;
 
+    @Autowired
+    TransactionRepository transactions;
+
     @BeforeEach
     void clean() {
+        transactions.deleteAll();
         receipts.deleteAll();
     }
 

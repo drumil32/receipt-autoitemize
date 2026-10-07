@@ -48,7 +48,8 @@ public class ReceiptController {
     /** Fetch a stored receipt by id. 404 if unknown. */
     @GetMapping("/{id}")
     public ReceiptResponse get(@PathVariable String id) {
-        return ReceiptResponse.from(receiptService.getReceipt(id));
+        var receipt = receiptService.getReceipt(id);
+        return ReceiptResponse.from(receipt, receiptService.transactionIdFor(id));
     }
 
     /** Run OCR + extraction and create-or-update the one transaction. 201 create / 200 update. */

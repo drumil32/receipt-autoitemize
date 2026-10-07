@@ -11,13 +11,12 @@ public record ReceiptResponse(
         boolean processed,
         String transactionId) {
 
-    public static ReceiptResponse from(Receipt receipt) {
-        // TODO: populate transactionId once process/transactions exist
+    public static ReceiptResponse from(Receipt receipt, String transactionId) {
         return new ReceiptResponse(
                 receipt.getId(),
                 receipt.getOriginalFilename(),
                 receipt.getUploadedAt(),
                 receipt.isProcessed(),
-                null);
+                transactionId);
     }
 }

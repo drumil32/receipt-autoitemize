@@ -1,8 +1,10 @@
 package com.navan.receipts.service;
 
 import com.navan.receipts.domain.Receipt;
+import com.navan.receipts.domain.Transaction;
 import com.navan.receipts.error.ResourceNotFoundException;
 import com.navan.receipts.repository.ReceiptRepository;
+import com.navan.receipts.repository.TransactionRepository;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
@@ -15,10 +17,13 @@ import org.springframework.stereotype.Service;
 public class ReceiptService {
 
     private final ReceiptRepository receipts;
+    private final TransactionRepository transactions;
     private final FileStorageService storage;
 
-    public ReceiptService(ReceiptRepository receipts, FileStorageService storage) {
+    public ReceiptService(
+            ReceiptRepository receipts, TransactionRepository transactions, FileStorageService storage) {
         this.receipts = receipts;
+        this.transactions = transactions;
         this.storage = storage;
     }
 
@@ -71,6 +76,11 @@ public class ReceiptService {
     public Receipt getReceipt(String id) {
         return receipts.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Receipt not found: " + id));
+    }
+
+    /** The id of this receipt's transaction, or null if it has not been processed. */
+    public String transactionIdFor(String receiptId) {
+        return transactions.findByReceipt_Id(receiptId).map(Transaction::getId).orElse(null);
     }
 
     private static String sha256(byte[] bytes) {

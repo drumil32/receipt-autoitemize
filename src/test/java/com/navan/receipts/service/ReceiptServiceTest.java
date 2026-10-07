@@ -27,6 +27,9 @@ class ReceiptServiceTest {
     ReceiptRepository receipts;
 
     @Mock
+    com.navan.receipts.repository.TransactionRepository transactions;
+
+    @Mock
     FileStorageService storage;
 
     @InjectMocks

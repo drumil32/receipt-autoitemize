@@ -1,12 +1,15 @@
 package com.navan.receipts.web;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.navan.receipts.repository.ReceiptRepository;
+import com.navan.receipts.repository.TransactionRepository;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,8 +30,12 @@ class ReceiptGetTest {
     @Autowired
     ReceiptRepository receipts;
 
+    @Autowired
+    TransactionRepository transactions;
+
     @BeforeEach
     void clean() {
+        transactions.deleteAll();
         receipts.deleteAll();
     }
 
@@ -51,6 +58,17 @@ class ReceiptGetTest {
                 .andExpect(jsonPath("$.uploaded_at").isNotEmpty())
                 .andExpect(jsonPath("$.processed").value(false))
                 .andExpect(jsonPath("$.transaction_id").value(nullValue()));
+    }
+
+    @Test
+    void getProcessedReceipt_exposesTransactionId() throws Exception {
+        String id = uploadCleanReceipt();
+        mockMvc.perform(post("/receipts/{id}/process", id)).andExpect(status().isCreated());
+
+        mockMvc.perform(get("/receipts/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.processed").value(true))
+                .andExpect(jsonPath("$.transaction_id").value(notNullValue()));
     }
 
     @Test
