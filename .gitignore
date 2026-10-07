@@ -36,3 +36,5 @@ build/
 data/*.db
 data/*.db-*
 .DS_Store
+data/files/
+data/test-files/
