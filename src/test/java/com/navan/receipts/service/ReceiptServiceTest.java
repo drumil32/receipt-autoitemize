@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
@@ -77,10 +78,10 @@ class ReceiptServiceTest {
     void dbFailure_compensateByDeletingOrphanFile() {
         when(receipts.findByContentHash(any())).thenReturn(Optional.empty());
         when(storage.store(any(), any())).thenReturn("data/files/hash");
-        when(receipts.save(any())).thenThrow(new RuntimeException("db down"));
+        when(receipts.save(any())).thenThrow(new DataAccessResourceFailureException("db down"));
 
         assertThatThrownBy(() -> service.upload("r.txt", bytes))
-                .isInstanceOf(RuntimeException.class)
+                .isInstanceOf(DataAccessResourceFailureException.class)
                 .hasMessage("db down");
 
         verify(storage).delete("data/files/hash"); // orphan file cleaned up

@@ -7,7 +7,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -44,23 +44,26 @@ public class ReceiptService {
             log.info("Stored new receipt {} ({})", saved.getId(), filename);
             // TODO(metric): increment receipt.upload.created counter
             return new UploadResult(saved, true);
-        } catch (DataIntegrityViolationException race) {
-            // A concurrent identical upload won the unique(content_hash). The file is
-            // content-addressed and shared with the winner, so keep it; return the winner.
-            Receipt winner = receipts.findByContentHash(hash).orElseThrow();
-            log.warn("Concurrent identical upload; returning winner receipt {}", winner.getId());
-            // TODO(metric): increment receipt.upload.race counter
-            return new UploadResult(winner, false);
-        } catch (RuntimeException dbFailure) {
-            // DB save failed for another reason: compensate by removing the orphan file.
-            log.error("DB save failed after storing file {}; deleting orphan", path, dbFailure);
+        } catch (DataAccessException failure) {
+            // The insert failed. Re-read to tell a concurrent-duplicate race from a real error
+            // without depending on the provider's exception mapping (SQLite reports the unique
+            // violation as a generic JpaSystemException, Postgres as DataIntegrityViolationException).
+            var winner = receipts.findByContentHash(hash);
+            if (winner.isPresent()) {
+                // A concurrent identical upload won; the file is content-addressed and shared.
+                log.warn("Concurrent identical upload; returning winner receipt {}", winner.get().getId());
+                // TODO(metric): increment receipt.upload.race counter
+                return new UploadResult(winner.get(), false);
+            }
+            // Genuine failure: compensate by removing the orphan file, then surface it.
+            log.error("DB save failed after storing file {}; deleting orphan", path, failure);
             // TODO(metric): increment receipt.upload.failure counter
             try {
                 storage.delete(path);
             } catch (RuntimeException ignored) {
                 // best-effort cleanup; surface the original failure
             }
-            throw dbFailure;
+            throw failure;
         }
     }
 
