@@ -51,4 +51,10 @@ public class TransactionController {
                 .toList();
         return TransactionResponse.from(transactionService.replaceItems(id, items));
     }
+
+    /** Confirm itemization. 404 if unknown; 409 + mismatch payload if it doesn't reconcile. */
+    @PostMapping("/{id}/complete")
+    public TransactionResponse complete(@PathVariable String id) {
+        return TransactionResponse.from(transactionService.complete(id));
+    }
 }

@@ -114,6 +114,34 @@ public class TransactionService {
         return saved;
     }
 
+    /**
+     * Explicit confirm/gate: marks the transaction COMPLETE iff its current line items + stored
+     * taxes reconcile with the grand total. Otherwise throws {@link MismatchException} (409) and
+     * changes nothing. Operates on already-stored data; idempotent when it still reconciles.
+     */
+    @Transactional
+    public Transaction complete(String transactionId) {
+        Transaction txn = transactions.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found: " + transactionId));
+
+        BigDecimal itemsTotal = sum(txn.getLineItems().stream().map(LineItem::getAmount).toList());
+        BigDecimal taxesTotal = sum(txn.getTaxes().stream().map(Tax::getAmount).toList());
+        BigDecimal grandTotal = txn.getGrandTotal();
+
+        // Same gate as PATCH: zero items can't be COMPLETE; otherwise require exact reconciliation.
+        if (txn.getLineItems().isEmpty() || !Reconciliation.reconciles(itemsTotal, taxesTotal, grandTotal)) {
+            log.warn("Complete rejected for transaction {}: does not reconcile", transactionId);
+            // TODO(metric): increment transaction.complete.rejected counter
+            throw new MismatchException(itemsTotal, taxesTotal, grandTotal);
+        }
+
+        txn.setItemizeStatus(ItemizeStatus.COMPLETE);
+        Transaction saved = transactions.save(txn);
+        log.info("Completed transaction {} -> COMPLETE", saved.getId());
+        // TODO(metric): increment transaction.complete.applied counter
+        return saved;
+    }
+
     /** COMPLETE iff items are present and items + taxes reconcile with the grand total. */
     private static ItemizeStatus statusFor(List<LineItem> items, List<Tax> taxes, BigDecimal grandTotal) {
         if (items.isEmpty()) {

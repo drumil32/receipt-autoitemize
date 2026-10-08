@@ -13,6 +13,7 @@ import com.navan.receipts.domain.Receipt;
 import com.navan.receipts.domain.Tax;
 import com.navan.receipts.domain.Transaction;
 import com.navan.receipts.error.MismatchException;
+import com.navan.receipts.error.ResourceNotFoundException;
 import com.navan.receipts.extract.ExtractedLineItem;
 import com.navan.receipts.extract.ExtractedReceipt;
 import com.navan.receipts.extract.ExtractedTax;
@@ -183,6 +184,51 @@ class TransactionServiceTest {
                 .isInstanceOf(MismatchException.class);
 
         verify(transactions, never()).save(any());
+    }
+
+    @Test
+    void complete_reconciles_setsComplete() {
+        Transaction txn = txnWithVat();
+        LineItem item = new LineItem();
+        item.setDescription("Combined");
+        item.setAmount(new BigDecimal("15.00")); // 15.00 + 2.85 == 17.85
+        txn.addLineItem(item);
+        when(transactions.findById("t-1")).thenReturn(Optional.of(txn));
+        when(transactions.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Transaction result = service.complete("t-1");
+
+        assertThat(result.getItemizeStatus()).isEqualTo(ItemizeStatus.COMPLETE);
+    }
+
+    @Test
+    void complete_doesNotReconcile_throwsMismatch_andDoesNotSave() {
+        Transaction txn = txnWithVat();
+        LineItem item = new LineItem();
+        item.setDescription("Too little");
+        item.setAmount(new BigDecimal("5.00")); // 5.00 + 2.85 != 17.85
+        txn.addLineItem(item);
+        when(transactions.findById("t-1")).thenReturn(Optional.of(txn));
+
+        assertThatThrownBy(() -> service.complete("t-1")).isInstanceOf(MismatchException.class);
+
+        verify(transactions, never()).save(any());
+    }
+
+    @Test
+    void complete_emptyItems_throwsMismatch_andDoesNotSave() {
+        when(transactions.findById("t-1")).thenReturn(Optional.of(txnWithVat())); // no line items
+
+        assertThatThrownBy(() -> service.complete("t-1")).isInstanceOf(MismatchException.class);
+
+        verify(transactions, never()).save(any());
+    }
+
+    @Test
+    void complete_unknownId_throwsNotFound() {
+        when(transactions.findById("nope")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.complete("nope")).isInstanceOf(ResourceNotFoundException.class);
     }
 
     /** A transaction with VAT 2.85 and grand total 17.85 (so items must net to 15.00). */
