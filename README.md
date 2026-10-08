@@ -50,6 +50,22 @@ mvnw.cmd spring-boot:run
 
 Starts on **http://localhost:8080**. Health check: `curl localhost:8080/health`
 
+### Build a runnable JAR (optional)
+
+`package` produces a single self-contained executable JAR (app + embedded
+Tomcat + all dependencies) — no Maven or app server needed to run it:
+
+```bash
+# macOS / Linux   (use mvnw.cmd on Windows)
+./mvnw clean package              # runs the tests, then builds the jar
+java -jar target/receipts-0.0.1-SNAPSHOT.jar
+```
+
+Same result as `spring-boot:run`: serves on **http://localhost:8080**, creating
+`data/receipts.db` next to where you launch it. Add `--server.port=9090` (or
+`-Dserver.port=9090`) to change the port. To skip tests during packaging:
+`./mvnw clean package -DskipTests`.
+
 ## Test
 
 ```bash
