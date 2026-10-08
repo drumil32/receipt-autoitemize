@@ -12,6 +12,7 @@ import com.navan.receipts.domain.Transaction;
 import com.navan.receipts.extract.ExtractedLineItem;
 import com.navan.receipts.extract.ExtractedReceipt;
 import com.navan.receipts.extract.ExtractedTax;
+import com.navan.receipts.extract.ReceiptExtractor;
 import com.navan.receipts.repository.ReceiptRepository;
 import com.navan.receipts.repository.TransactionRepository;
 import com.navan.receipts.service.TransactionService.UpsertResult;
@@ -33,6 +34,9 @@ class TransactionServiceTest {
 
     @Mock
     TransactionRepository transactions;
+
+    @Mock
+    ReceiptExtractor extractor;
 
     @InjectMocks
     TransactionService service;
@@ -103,5 +107,40 @@ class TransactionServiceTest {
         assertThat(t.getTaxes().get(0).getName()).isEqualTo("VAT"); // old replaced
         assertThat(t.getLineItems()).hasSize(1);
         assertThat(t.getLineItems().get(0).getDescription()).isEqualTo("Espresso");
+    }
+
+    @Test
+    void reitemize_replacesLineItems_recomputesStatus_keepsHeaderAndTaxes() {
+        Receipt receipt = receipt();
+        receipt.setOcrText("stored ocr");
+        Transaction existing = new Transaction();
+        existing.setId("t-1");
+        existing.setReceipt(receipt);
+        existing.setMerchant("Cafe Mitte");
+        existing.setGrandTotal(new BigDecimal("17.85"));
+        existing.setItemizeStatus(ItemizeStatus.NEEDS_REVIEW);
+        Tax vat = new Tax();
+        vat.setName("VAT");
+        vat.setRate(new BigDecimal("0.19"));
+        vat.setAmount(new BigDecimal("2.85"));
+        existing.addTax(vat);
+        LineItem stale = new LineItem();
+        stale.setDescription("Stale");
+        stale.setAmount(new BigDecimal("99.00"));
+        existing.addLineItem(stale);
+
+        when(transactions.findById("t-1")).thenReturn(Optional.of(existing));
+        when(extractor.extract("stored ocr")).thenReturn(extracted()); // 1 item 3.50, VAT, total 17.85
+        when(transactions.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        Transaction result = service.reitemize("t-1");
+
+        assertThat(result.getLineItems()).hasSize(1);
+        assertThat(result.getLineItems().get(0).getDescription()).isEqualTo("Espresso"); // stale replaced
+        assertThat(result.getMerchant()).isEqualTo("Cafe Mitte"); // header untouched
+        assertThat(result.getTaxes()).hasSize(1); // taxes untouched
+        assertThat(result.getGrandTotal()).isEqualByComparingTo("17.85"); // total untouched
+        // 3.50 + 2.85 != 17.85 -> NEEDS_REVIEW
+        assertThat(result.getItemizeStatus()).isEqualTo(ItemizeStatus.NEEDS_REVIEW);
     }
 }

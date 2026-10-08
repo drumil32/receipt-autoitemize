@@ -1,13 +1,17 @@
 package com.navan.receipts.service;
 
+import com.navan.receipts.domain.ItemizeStatus;
 import com.navan.receipts.domain.LineItem;
 import com.navan.receipts.domain.Receipt;
 import com.navan.receipts.domain.Tax;
 import com.navan.receipts.domain.Transaction;
 import com.navan.receipts.error.ResourceNotFoundException;
 import com.navan.receipts.extract.ExtractedReceipt;
+import com.navan.receipts.extract.ReceiptExtractor;
+import com.navan.receipts.extract.Reconciliation;
 import com.navan.receipts.repository.ReceiptRepository;
 import com.navan.receipts.repository.TransactionRepository;
+import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,10 +21,13 @@ public class TransactionService {
 
     private final ReceiptRepository receipts;
     private final TransactionRepository transactions;
+    private final ReceiptExtractor extractor;
 
-    public TransactionService(ReceiptRepository receipts, TransactionRepository transactions) {
+    public TransactionService(
+            ReceiptRepository receipts, TransactionRepository transactions, ReceiptExtractor extractor) {
         this.receipts = receipts;
         this.transactions = transactions;
+        this.extractor = extractor;
     }
 
     /**
@@ -51,6 +58,38 @@ public class TransactionService {
         txn.replaceLineItems(toLineItems(extracted));
 
         return new UpsertResult(transactions.save(txn), created);
+    }
+
+    /**
+     * Re-runs auto-itemize from the receipt's stored OCR, replacing line items only. Header,
+     * taxes and grand total are untouched; status is recomputed against the stored taxes/total.
+     */
+    @Transactional
+    public Transaction reitemize(String transactionId) {
+        Transaction txn = transactions.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found: " + transactionId));
+
+        ExtractedReceipt extracted = extractor.extract(txn.getReceipt().getOcrText());
+        txn.replaceLineItems(toLineItems(extracted));
+        txn.setItemizeStatus(statusFor(txn.getLineItems(), txn.getTaxes(), txn.getGrandTotal()));
+
+        return transactions.save(txn);
+    }
+
+    /** COMPLETE iff items are present and items + taxes reconcile with the grand total. */
+    private static ItemizeStatus statusFor(List<LineItem> items, List<Tax> taxes, BigDecimal grandTotal) {
+        if (items.isEmpty()) {
+            return ItemizeStatus.NEEDS_REVIEW;
+        }
+        BigDecimal itemsTotal = sum(items.stream().map(LineItem::getAmount).toList());
+        BigDecimal taxesTotal = sum(taxes.stream().map(Tax::getAmount).toList());
+        return Reconciliation.reconciles(itemsTotal, taxesTotal, grandTotal)
+                ? ItemizeStatus.COMPLETE
+                : ItemizeStatus.NEEDS_REVIEW;
+    }
+
+    private static BigDecimal sum(List<BigDecimal> values) {
+        return values.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /** Returns a transaction by id with its children loaded. 404 if unknown. */
