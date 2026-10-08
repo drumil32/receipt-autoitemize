@@ -84,6 +84,17 @@ public class ReceiptService {
         return transactions.findByReceipt_Id(receiptId).map(Transaction::getId).orElse(null);
     }
 
+    /** Deletes an unprocessed receipt (row + file). 409 if a transaction already exists. */
+    public void delete(String id) {
+        Receipt receipt = getReceipt(id);
+        if (transactions.findByReceipt_Id(id).isPresent()) {
+            throw new ConflictException("Receipt has a transaction and cannot be deleted: " + id);
+        }
+        receipts.delete(receipt);
+        storage.delete(receipt.getStoragePath());
+        log.info("Deleted unprocessed receipt {}", id);
+    }
+
     /** Stored OCR text. 404 if the receipt is missing, 409 if it has not been processed yet. */
     public String getOcrText(String id) {
         Receipt receipt = getReceipt(id);
