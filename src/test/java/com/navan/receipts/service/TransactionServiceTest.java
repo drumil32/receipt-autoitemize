@@ -1,7 +1,10 @@
 package com.navan.receipts.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.navan.receipts.domain.ItemizeStatus;
@@ -9,6 +12,7 @@ import com.navan.receipts.domain.LineItem;
 import com.navan.receipts.domain.Receipt;
 import com.navan.receipts.domain.Tax;
 import com.navan.receipts.domain.Transaction;
+import com.navan.receipts.error.MismatchException;
 import com.navan.receipts.extract.ExtractedLineItem;
 import com.navan.receipts.extract.ExtractedReceipt;
 import com.navan.receipts.extract.ExtractedTax;
@@ -142,5 +146,54 @@ class TransactionServiceTest {
         assertThat(result.getGrandTotal()).isEqualByComparingTo("17.85"); // total untouched
         // 3.50 + 2.85 != 17.85 -> NEEDS_REVIEW
         assertThat(result.getItemizeStatus()).isEqualTo(ItemizeStatus.NEEDS_REVIEW);
+    }
+
+    @Test
+    void replaceItems_reconciles_replacesAndCompletes() {
+        when(transactions.findById("t-1")).thenReturn(Optional.of(txnWithVat()));
+        when(transactions.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        // 15.00 + 2.85 == 17.85
+        Transaction result = service.replaceItems("t-1",
+                List.of(new ExtractedLineItem("Combined", new BigDecimal("15.00"))));
+
+        assertThat(result.getLineItems()).hasSize(1);
+        assertThat(result.getItemizeStatus()).isEqualTo(ItemizeStatus.COMPLETE);
+    }
+
+    @Test
+    void replaceItems_doesNotReconcile_throwsMismatch_andDoesNotSave() {
+        when(transactions.findById("t-1")).thenReturn(Optional.of(txnWithVat()));
+
+        assertThatThrownBy(() -> service.replaceItems("t-1",
+                List.of(new ExtractedLineItem("Too little", new BigDecimal("5.00")))))
+                .isInstanceOf(MismatchException.class);
+
+        verify(transactions, never()).save(any());
+    }
+
+    @Test
+    void replaceItems_empty_throwsMismatch() {
+        when(transactions.findById("t-1")).thenReturn(Optional.of(txnWithVat()));
+
+        assertThatThrownBy(() -> service.replaceItems("t-1", List.of()))
+                .isInstanceOf(MismatchException.class);
+
+        verify(transactions, never()).save(any());
+    }
+
+    /** A transaction with VAT 2.85 and grand total 17.85 (so items must net to 15.00). */
+    private Transaction txnWithVat() {
+        Transaction t = new Transaction();
+        t.setId("t-1");
+        t.setReceipt(receipt());
+        t.setGrandTotal(new BigDecimal("17.85"));
+        t.setItemizeStatus(ItemizeStatus.NEEDS_REVIEW);
+        Tax vat = new Tax();
+        vat.setName("VAT");
+        vat.setRate(new BigDecimal("0.19"));
+        vat.setAmount(new BigDecimal("2.85"));
+        t.addTax(vat);
+        return t;
     }
 }

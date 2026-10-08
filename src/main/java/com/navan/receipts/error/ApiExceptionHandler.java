@@ -4,6 +4,7 @@ import java.io.UncheckedIOException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MultipartException;
@@ -23,6 +24,27 @@ public class ApiExceptionHandler {
             log.debug("{}: {}", status.value(), ex.getMessage());
         }
         return response(status, ex.getMessage());
+    }
+
+    /** Reconciliation mismatch (409) with the offending totals so the caller sees why. */
+    @ExceptionHandler(MismatchException.class)
+    public ResponseEntity<MismatchResponse> handleMismatch(MismatchException ex) {
+        log.debug("409 mismatch: items={} taxes={} total={}",
+                ex.getItemsTotal(), ex.getTaxesTotal(), ex.getGrandTotal());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new MismatchResponse(409, "Conflict", ex.getMessage(),
+                        ex.getItemsTotal(), ex.getTaxesTotal(), ex.getGrandTotal(), ex.getDifference()));
+    }
+
+    /** Bean-validation failures on request bodies -> 400 in our standard shape. */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .map(f -> f.getField() + " " + f.getDefaultMessage())
+                .orElse("Validation failed");
+        log.debug("400 validation: {}", message);
+        return response(HttpStatus.BAD_REQUEST, message);
     }
 
     /** A non-multipart (or malformed multipart) upload is a client error, not a 500. */

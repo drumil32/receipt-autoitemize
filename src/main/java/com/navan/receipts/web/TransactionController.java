@@ -1,9 +1,14 @@
 package com.navan.receipts.web;
 
+import com.navan.receipts.extract.ExtractedLineItem;
 import com.navan.receipts.service.TransactionService;
+import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,5 +39,16 @@ public class TransactionController {
     @PostMapping("/{id}/itemize")
     public TransactionResponse itemize(@PathVariable String id) {
         return TransactionResponse.from(transactionService.reitemize(id));
+    }
+
+    /** User override of line items. 409 + mismatch payload (persists nothing) if it doesn't reconcile. */
+    @PatchMapping("/{id}/items")
+    public TransactionResponse patchItems(
+            @PathVariable String id, @Valid @RequestBody ItemsPatchRequest body) {
+        List<ExtractedLineItem> items = (body.lineItems() == null ? List.<ItemsPatchRequest.LineItemPatch>of() : body.lineItems())
+                .stream()
+                .map(i -> new ExtractedLineItem(i.description(), i.amount()))
+                .toList();
+        return TransactionResponse.from(transactionService.replaceItems(id, items));
     }
 }

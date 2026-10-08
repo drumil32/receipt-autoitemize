@@ -5,7 +5,9 @@ import com.navan.receipts.domain.LineItem;
 import com.navan.receipts.domain.Receipt;
 import com.navan.receipts.domain.Tax;
 import com.navan.receipts.domain.Transaction;
+import com.navan.receipts.error.MismatchException;
 import com.navan.receipts.error.ResourceNotFoundException;
+import com.navan.receipts.extract.ExtractedLineItem;
 import com.navan.receipts.extract.ExtractedReceipt;
 import com.navan.receipts.extract.ReceiptExtractor;
 import com.navan.receipts.extract.Reconciliation;
@@ -57,7 +59,7 @@ public class TransactionService {
         txn.setGrandTotal(extracted.grandTotal());
         txn.setItemizeStatus(extracted.itemizeStatus());
         txn.replaceTaxes(toTaxes(extracted));
-        txn.replaceLineItems(toLineItems(extracted));
+        txn.replaceLineItems(toLineItems(extracted.lineItems()));
 
         return new UpsertResult(transactions.save(txn), created);
     }
@@ -72,12 +74,42 @@ public class TransactionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found: " + transactionId));
 
         ExtractedReceipt extracted = extractor.extract(txn.getReceipt().getOcrText());
-        txn.replaceLineItems(toLineItems(extracted));
+        txn.replaceLineItems(toLineItems(extracted.lineItems()));
         txn.setItemizeStatus(statusFor(txn.getLineItems(), txn.getTaxes(), txn.getGrandTotal()));
 
         Transaction saved = transactions.save(txn);
         log.info("Re-itemized transaction {} -> {}", saved.getId(), saved.getItemizeStatus());
         // TODO(metric): increment itemize.result{status=<itemizeStatus>} counter
+        return saved;
+    }
+
+    /**
+     * User override: replace the line items with the supplied set. Persists only if items + stored
+     * taxes reconcile with the grand total; otherwise throws {@link MismatchException} (409) and
+     * changes nothing. Header, taxes and grand total are never touched.
+     */
+    @Transactional
+    public Transaction replaceItems(String transactionId, List<ExtractedLineItem> newItems) {
+        Transaction txn = transactions.findById(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found: " + transactionId));
+
+        List<ExtractedLineItem> items = newItems == null ? List.of() : newItems;
+        BigDecimal itemsTotal = sum(items.stream().map(ExtractedLineItem::amount).toList());
+        BigDecimal taxesTotal = sum(txn.getTaxes().stream().map(Tax::getAmount).toList());
+        BigDecimal grandTotal = txn.getGrandTotal();
+
+        // Empty items can never be COMPLETE; otherwise require exact reconciliation.
+        if (items.isEmpty() || !Reconciliation.reconciles(itemsTotal, taxesTotal, grandTotal)) {
+            log.warn("PATCH items rejected for transaction {}: does not reconcile", transactionId);
+            // TODO(metric): increment items.patch.rejected counter
+            throw new MismatchException(itemsTotal, taxesTotal, grandTotal);
+        }
+
+        txn.replaceLineItems(toLineItems(items));
+        txn.setItemizeStatus(ItemizeStatus.COMPLETE);
+        Transaction saved = transactions.save(txn);
+        log.info("Patched items on transaction {} -> COMPLETE", saved.getId());
+        // TODO(metric): increment items.patch.applied counter
         return saved;
     }
 
@@ -128,8 +160,8 @@ public class TransactionService {
         }).toList();
     }
 
-    private static List<LineItem> toLineItems(ExtractedReceipt extracted) {
-        return extracted.lineItems().stream().map(i -> {
+    private static List<LineItem> toLineItems(List<ExtractedLineItem> items) {
+        return items.stream().map(i -> {
             LineItem item = new LineItem();
             item.setDescription(i.description());
             item.setAmount(i.amount());
