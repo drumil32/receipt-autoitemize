@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.navan.receipts.domain.Receipt;
+import com.navan.receipts.domain.Transaction;
+import com.navan.receipts.error.ConflictException;
 import com.navan.receipts.error.ResourceNotFoundException;
 import com.navan.receipts.repository.ReceiptRepository;
 import com.navan.receipts.service.ReceiptService.UploadResult;
@@ -105,6 +107,33 @@ class ReceiptServiceTest {
         assertThatThrownBy(() -> service.getReceipt("nope"))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("nope");
+    }
+
+    @Test
+    void delete_whenTransactionExists_throwsConflict_andDeletesNothing() {
+        Receipt receipt = receiptWithId("r-1");
+        receipt.setStoragePath("data/files/hash");
+        when(receipts.findById("r-1")).thenReturn(Optional.of(receipt));
+        when(transactions.findByReceipt_Id("r-1")).thenReturn(Optional.of(new Transaction()));
+
+        assertThatThrownBy(() -> service.delete("r-1"))
+                .isInstanceOf(ConflictException.class);
+
+        verify(receipts, never()).delete(any());
+        verify(storage, never()).delete(any());
+    }
+
+    @Test
+    void delete_whenNoTransaction_deletesRowAndFile() {
+        Receipt receipt = receiptWithId("r-1");
+        receipt.setStoragePath("data/files/hash");
+        when(receipts.findById("r-1")).thenReturn(Optional.of(receipt));
+        when(transactions.findByReceipt_Id("r-1")).thenReturn(Optional.empty());
+
+        service.delete("r-1");
+
+        verify(receipts).delete(receipt);
+        verify(storage).delete("data/files/hash");
     }
 
     private Receipt receiptWithId(String id) {

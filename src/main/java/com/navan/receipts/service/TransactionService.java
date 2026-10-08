@@ -13,10 +13,12 @@ import com.navan.receipts.repository.ReceiptRepository;
 import com.navan.receipts.repository.TransactionRepository;
 import java.math.BigDecimal;
 import java.util.List;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@Slf4j
 public class TransactionService {
 
     private final ReceiptRepository receipts;
@@ -73,7 +75,10 @@ public class TransactionService {
         txn.replaceLineItems(toLineItems(extracted));
         txn.setItemizeStatus(statusFor(txn.getLineItems(), txn.getTaxes(), txn.getGrandTotal()));
 
-        return transactions.save(txn);
+        Transaction saved = transactions.save(txn);
+        log.info("Re-itemized transaction {} -> {}", saved.getId(), saved.getItemizeStatus());
+        // TODO(metric): increment itemize.result{status=<itemizeStatus>} counter
+        return saved;
     }
 
     /** COMPLETE iff items are present and items + taxes reconcile with the grand total. */
