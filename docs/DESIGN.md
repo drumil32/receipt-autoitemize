@@ -115,6 +115,10 @@ downstream regardless.
 `sum(line_items.amount) + sum(taxes.amount) == grand_total` (compared at scale
 2). This matches the clean fixture (15.00 + 2.85 = 17.85).
 
+A line item's optional `tax_amount` is **stored metadata only** — reconciliation
+always uses the dedicated `taxes` rows, never per-item tax. So PATCH/`complete`
+reconcile the same way whether or not per-item tax is supplied.
+
 `itemize_status`:
 - `COMPLETE` — items present and the sum reconciles.
 - `NEEDS_REVIEW` — items absent, or present but sum ≠ total.
@@ -133,7 +137,7 @@ downstream regardless.
 | GET | `/transactions/{id}` | Header + taxes + line_items + itemize_status + receipt_id. |
 | GET | `/transactions?receipt_id={id}` | The one transaction, or 404. Never a list. |
 | POST | `/transactions/{id}/itemize` | Re-itemize from **stored OCR**. Replace line items only; never touch header/taxes/total. |
-| PATCH | `/transactions/{id}/items` | Edit/merge/split. If items+taxes ≠ total → **409 + mismatch payload**, persist nothing. |
+| PATCH | `/transactions/{id}/items` | Edit/merge/split. If items+taxes ≠ total → **409 + mismatch payload**, persist nothing. Accepts optional per-item `tax_amount`/`quantity` (stored if sent, else null). |
 | POST | `/transactions/{id}/complete` | Set `COMPLETE` only if reconciles; else **409**, status unchanged. |
 | GET | `/health` | liveness. |
 
@@ -144,8 +148,11 @@ downstream regardless.
   no `1970-01-01`, no `0.00`.
 - 404 for missing receipt/transaction; 409 for state conflicts (OCR-before-
   process, delete-processed, mismatch on patch/complete).
-- Consistent JSON error body `{ "error", "message", ... }`; mismatch responses
-  include the computed sums so the caller sees why it failed.
+- **400** for a bad upload: empty file, non-multipart request, or a multipart
+  request missing the `file` part — each mapped to the standard error body.
+- Consistent JSON error body `{ "status", "error", "message" }`; mismatch (409)
+  responses additionally carry `items_total`, `taxes_total`, `grand_total`,
+  `difference` so the caller sees why it failed.
 
 ## 9. OCR stub & extraction
 
@@ -157,6 +164,12 @@ The extractor parses that text:
 - A line containing `VAT` + `NN%` → a tax (name=VAT, rate=NN/100, amount=
   trailing number). Handles `VAT 19%` and `incl. VAT 19%`.
 - `TOTAL` line → `grand_total`. `Subtotal` ignored.
+
+Line items carry optional `tax_amount`/`quantity` fields, but the current text
+parser doesn't read them (no fixture has per-item tax or quantity) — they stay
+null unless a user supplies them via PATCH. One `ExtractedLineItem` type is
+reused for both the extractor and PATCH edits, so teaching OCR to read these is
+a parser change, not a new type.
 
 Fixture outcomes (vs `gold.json`):
 - clean → 3 items, VAT 2.85, total 17.85, `COMPLETE`.
