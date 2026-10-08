@@ -153,11 +153,14 @@ class TransactionServiceTest {
         when(transactions.findById("t-1")).thenReturn(Optional.of(txnWithVat()));
         when(transactions.save(any())).thenAnswer(i -> i.getArgument(0));
 
-        // 15.00 + 2.85 == 17.85
+        // 15.00 + 2.85 == 17.85; also carries optional quantity + tax_amount
         Transaction result = service.replaceItems("t-1",
-                List.of(new ExtractedLineItem("Combined", new BigDecimal("15.00"))));
+                List.of(new TransactionService.ItemInput(
+                        "Combined", new BigDecimal("15.00"), new BigDecimal("2.85"), 3)));
 
         assertThat(result.getLineItems()).hasSize(1);
+        assertThat(result.getLineItems().get(0).getQuantity()).isEqualTo(3);
+        assertThat(result.getLineItems().get(0).getTaxAmount()).isEqualByComparingTo("2.85");
         assertThat(result.getItemizeStatus()).isEqualTo(ItemizeStatus.COMPLETE);
     }
 
@@ -166,7 +169,7 @@ class TransactionServiceTest {
         when(transactions.findById("t-1")).thenReturn(Optional.of(txnWithVat()));
 
         assertThatThrownBy(() -> service.replaceItems("t-1",
-                List.of(new ExtractedLineItem("Too little", new BigDecimal("5.00")))))
+                List.of(new TransactionService.ItemInput("Too little", new BigDecimal("5.00"), null, null))))
                 .isInstanceOf(MismatchException.class);
 
         verify(transactions, never()).save(any());

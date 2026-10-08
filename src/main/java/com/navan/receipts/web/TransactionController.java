@@ -1,7 +1,7 @@
 package com.navan.receipts.web;
 
-import com.navan.receipts.extract.ExtractedLineItem;
 import com.navan.receipts.service.TransactionService;
+import com.navan.receipts.service.TransactionService.ItemInput;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,9 +45,9 @@ public class TransactionController {
     @PatchMapping("/{id}/items")
     public TransactionResponse patchItems(
             @PathVariable String id, @Valid @RequestBody ItemsPatchRequest body) {
-        List<ExtractedLineItem> items = (body.lineItems() == null ? List.<ItemsPatchRequest.LineItemPatch>of() : body.lineItems())
+        List<ItemInput> items = (body.lineItems() == null ? List.<ItemsPatchRequest.LineItemPatch>of() : body.lineItems())
                 .stream()
-                .map(i -> new ExtractedLineItem(i.description(), i.amount()))
+                .map(i -> new ItemInput(i.description(), i.amount(), i.taxAmount(), i.quantity()))
                 .toList();
         return TransactionResponse.from(transactionService.replaceItems(id, items));
     }

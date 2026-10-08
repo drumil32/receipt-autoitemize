@@ -1,5 +1,6 @@
 package com.navan.receipts.web;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -68,7 +69,22 @@ class PatchItemsTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.line_items.length()").value(1))
                 .andExpect(jsonPath("$.grand_total").value(17.85))
-                .andExpect(jsonPath("$.itemize_status").value("COMPLETE"));
+                .andExpect(jsonPath("$.itemize_status").value("COMPLETE"))
+                // optional fields omitted -> null
+                .andExpect(jsonPath("$.line_items[0].tax_amount").value(nullValue()))
+                .andExpect(jsonPath("$.line_items[0].quantity").value(nullValue()));
+    }
+
+    @Test
+    void patch_withOptionalFields_storesTaxAmountAndQuantity() throws Exception {
+        String txnId = processClean();
+
+        String body = "{\"line_items\":[{\"description\":\"Combined\",\"amount\":15.00,"
+                + "\"tax_amount\":2.85,\"quantity\":3}]}";
+        mockMvc.perform(patchItems(txnId, body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.line_items[0].tax_amount").value(2.85))
+                .andExpect(jsonPath("$.line_items[0].quantity").value(3));
     }
 
     // Required test #4
