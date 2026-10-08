@@ -12,12 +12,40 @@ line, no rewritten total.
 **Stack:** Java 21 · Spring Boot 4 · Spring Data JPA / Hibernate · **on-disk SQLite**
 (`data/receipts.db`, auto-created) · `BigDecimal` money (amounts scale 2, rates scale 4).
 
+## Prerequisites
+
+Runs on **macOS, Linux, and Windows** — the only differences are the wrapper
+command (`./mvnw` vs `mvnw.cmd`) and how you point to JDK 21.
+
+| Requirement | Details |
+|---|---|
+| **JDK 21 (LTS)** | **The only thing you must install.** Spring Boot 4 needs Java 21+; this project is pinned to **21** (newer JDKs aren't certified for this Boot/Hibernate yet). Verify with `java -version`. Temurin / Zulu / Oracle all work. |
+| Maven | **Not required** — the bundled Maven Wrapper downloads the right version on first use. |
+| Database | **Nothing to install** — SQLite is embedded via the `sqlite-jdbc` driver; the file `data/receipts.db` is created automatically on first run. |
+| Git | To clone the repo. |
+| Internet | First build only (to download dependencies); offline afterwards. |
+| Free TCP port | **8080** (default). |
+| `curl` + `jq` | Only for the example walkthrough below. `curl` ships with Windows 10+/macOS/Linux; `jq` is optional (used to capture ids). |
+
+> No Docker, no database server, no OCR/LLM account. OCR is stubbed.
+
 ## Run
 
-Requires **JDK 21**. On macOS: `export JAVA_HOME=$(/usr/libexec/java_home -v 21)`
+**Prereq:** make sure `java -version` reports **21**. If your default isn't 21, point `JAVA_HOME` at a JDK 21 install first:
+
+- **macOS:** `export JAVA_HOME=$(/usr/libexec/java_home -v 21)`
+- **Linux:** `export JAVA_HOME=/usr/lib/jvm/java-21-openjdk` *(adjust to your path)*
+- **Windows (PowerShell):** `$env:JAVA_HOME = "C:\Path\To\jdk-21"`
+
+Then start the server:
 
 ```bash
+# macOS / Linux
 ./mvnw spring-boot:run
+```
+```powershell
+# Windows (PowerShell / CMD)
+mvnw.cmd spring-boot:run
 ```
 
 Starts on **http://localhost:8080**. Health check: `curl localhost:8080/health`
@@ -25,7 +53,12 @@ Starts on **http://localhost:8080**. Health check: `curl localhost:8080/health`
 ## Test
 
 ```bash
+# macOS / Linux
 ./mvnw test
+```
+```powershell
+# Windows
+mvnw.cmd test
 ```
 
 69 tests (MockMvc over the real HTTP API + SQLite), covering all 9 required
@@ -64,6 +97,9 @@ flowchart LR
 | `POST` | `/transactions/{id}/complete` | Set `COMPLETE` only if it reconciles; else **409**, status unchanged. |
 
 ## Example walkthrough (every endpoint)
+
+> Bash (macOS / Linux / WSL / Git Bash). On Windows, run it in Git Bash or WSL,
+> or adapt the `curl` calls individually in PowerShell.
 
 ```bash
 BASE=http://localhost:8080
