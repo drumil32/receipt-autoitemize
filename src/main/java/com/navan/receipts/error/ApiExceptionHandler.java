@@ -8,6 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 /** Turns exceptions into consistent error responses. */
 @RestControllerAdvice
@@ -45,6 +46,13 @@ public class ApiExceptionHandler {
                 .orElse("Validation failed");
         log.debug("400 validation: {}", message);
         return response(HttpStatus.BAD_REQUEST, message);
+    }
+
+    /** Multipart upload missing the required `file` part -> 400 in our standard shape. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(MissingServletRequestPartException ex) {
+        log.debug("400: missing request part '{}'", ex.getRequestPartName());
+        return response(HttpStatus.BAD_REQUEST, "Required file part '" + ex.getRequestPartName() + "' is missing");
     }
 
     /** A non-multipart (or malformed multipart) upload is a client error, not a 500. */

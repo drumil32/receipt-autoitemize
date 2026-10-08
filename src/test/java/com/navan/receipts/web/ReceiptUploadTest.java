@@ -92,4 +92,19 @@ class ReceiptUploadTest {
 
         assertThat(receipts.count()).isZero();
     }
+
+    @Test
+    void upload_multipartMissingFilePart_returns400_inStandardShape() throws Exception {
+        // multipart request, but the part is named "notfile" instead of "file"
+        MockMultipartFile wrongName =
+                new MockMultipartFile("notfile", "receipt-clean.txt", "text/plain", cleanReceipt());
+
+        mockMvc.perform(multipart("/receipts").file(wrongName))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
+        assertThat(receipts.count()).isZero();
+    }
 }
