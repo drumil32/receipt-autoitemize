@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MultipartException;
 
 /** Turns exceptions into consistent error responses. */
 @RestControllerAdvice
@@ -22,6 +23,13 @@ public class ApiExceptionHandler {
             log.debug("{}: {}", status.value(), ex.getMessage());
         }
         return response(status, ex.getMessage());
+    }
+
+    /** A non-multipart (or malformed multipart) upload is a client error, not a 500. */
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ErrorResponse> handleMultipart(MultipartException ex) {
+        log.debug("400: {}", ex.getMessage());
+        return response(HttpStatus.BAD_REQUEST, "Expected a multipart file upload");
     }
 
     /** File I/O failures surface as a generic 500 without leaking internals. */

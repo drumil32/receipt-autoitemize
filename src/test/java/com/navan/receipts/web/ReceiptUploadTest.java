@@ -2,6 +2,7 @@ package com.navan.receipts.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -79,6 +80,15 @@ class ReceiptUploadTest {
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
                 .andExpect(jsonPath("$.message").isNotEmpty());
+
+        assertThat(receipts.count()).isZero();
+    }
+
+    @Test
+    void upload_nonMultipartRequest_returns400() throws Exception {
+        mockMvc.perform(post("/receipts").contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
 
         assertThat(receipts.count()).isZero();
     }
