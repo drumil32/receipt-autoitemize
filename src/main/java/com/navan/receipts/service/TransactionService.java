@@ -89,12 +89,12 @@ public class TransactionService {
      * changes nothing. Header, taxes and grand total are never touched.
      */
     @Transactional
-    public Transaction replaceItems(String transactionId, List<ItemInput> newItems) {
+    public Transaction replaceItems(String transactionId, List<ExtractedLineItem> newItems) {
         Transaction txn = transactions.findById(transactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction not found: " + transactionId));
 
-        List<ItemInput> items = newItems == null ? List.of() : newItems;
-        BigDecimal itemsTotal = sum(items.stream().map(ItemInput::amount).toList());
+        List<ExtractedLineItem> items = newItems == null ? List.of() : newItems;
+        BigDecimal itemsTotal = sum(items.stream().map(ExtractedLineItem::amount).toList());
         BigDecimal taxesTotal = sum(txn.getTaxes().stream().map(Tax::getAmount).toList());
         BigDecimal grandTotal = txn.getGrandTotal();
 
@@ -106,7 +106,7 @@ public class TransactionService {
             throw new MismatchException(itemsTotal, taxesTotal, grandTotal);
         }
 
-        txn.replaceLineItems(items.stream().map(ItemInput::toEntity).toList());
+        txn.replaceLineItems(toLineItems(items));
         txn.setItemizeStatus(ItemizeStatus.COMPLETE);
         Transaction saved = transactions.save(txn);
         log.info("Patched items on transaction {} -> COMPLETE", saved.getId());
@@ -166,23 +166,12 @@ public class TransactionService {
             LineItem item = new LineItem();
             item.setDescription(i.description());
             item.setAmount(i.amount());
+            item.setTaxAmount(i.taxAmount());
+            item.setQuantity(i.quantity());
             return item;
         }).toList();
     }
 
     /** Outcome of an upsert: the transaction, and whether it was newly created. */
     public record UpsertResult(Transaction transaction, boolean created) {}
-
-    /** A user-supplied line item for PATCH; tax_amount and quantity are optional (null if omitted). */
-    public record ItemInput(String description, BigDecimal amount, BigDecimal taxAmount, Integer quantity) {
-
-        LineItem toEntity() {
-            LineItem item = new LineItem();
-            item.setDescription(description);
-            item.setAmount(amount);
-            item.setTaxAmount(taxAmount);
-            item.setQuantity(quantity);
-            return item;
-        }
-    }
 }

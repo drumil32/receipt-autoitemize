@@ -155,7 +155,7 @@ class TransactionServiceTest {
 
         // 15.00 + 2.85 == 17.85; also carries optional quantity + tax_amount
         Transaction result = service.replaceItems("t-1",
-                List.of(new TransactionService.ItemInput(
+                List.of(new ExtractedLineItem(
                         "Combined", new BigDecimal("15.00"), new BigDecimal("2.85"), 3)));
 
         assertThat(result.getLineItems()).hasSize(1);
@@ -169,7 +169,7 @@ class TransactionServiceTest {
         when(transactions.findById("t-1")).thenReturn(Optional.of(txnWithVat()));
 
         assertThatThrownBy(() -> service.replaceItems("t-1",
-                List.of(new TransactionService.ItemInput("Too little", new BigDecimal("5.00"), null, null))))
+                List.of(new ExtractedLineItem("Too little", new BigDecimal("5.00")))))
                 .isInstanceOf(MismatchException.class);
 
         verify(transactions, never()).save(any());
